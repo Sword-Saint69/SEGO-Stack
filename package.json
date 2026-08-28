@@ -1,0 +1,61 @@
+{
+  "name": "sego-stack",
+  "version": "0.1.0",
+  "description": "SEGO Stack - Windows package manager by SEGO. One-click app bundles via winget/choco/scoop",
+  "main": "dist-electron/main.js",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build && tsc --project tsconfig.electron.json",
+    "preview": "vite preview",
+    "electron:dev": "vite --host",
+    "start": "electron dist-electron/main.js",
+    "dev:electron": "npm run build && electron dist-electron/main.js",
+    "package": "electron-builder",
+    "package:portable": "electron-builder --win portable",
+    "package:all": "electron-builder --win nsis portable",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.3",
+    "electron": "^32.2.0",
+    "electron-builder": "^25.1.8",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.3"
+  },
+  "build": {
+    "appId": "com.sego.stack",
+    "productName": "SEGO Stack",
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "catalog.json"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "portable": {
+      "artifactName": "SEGO-Stack-Portable-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "SEGO-Stack-Setup-${version}-${arch}.${ext}"
+    }
+  }
+}

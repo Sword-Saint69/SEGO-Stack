@@ -1,0 +1,242 @@
+﻿[
+    {
+        "id":  "vscode",
+        "name":  "Visual Studio Code",
+        "description":  "Code editor",
+        "category":  "Developer Tools",
+        "icon":  "icons/vscode.svg",
+        "providers":  {
+                          "winget":  "Microsoft.VisualStudioCode",
+                          "choco":  "vscode",
+                          "scoop":  "vscode"
+                      }
+    },
+    {
+        "id":  "chrome",
+        "name":  "Google Chrome",
+        "description":  "Web browser",
+        "category":  "Browsers",
+        "icon":  "icons/chrome.svg",
+        "providers":  {
+                          "winget":  "Google.Chrome",
+                          "choco":  "googlechrome",
+                          "scoop":  "googlechrome"
+                      }
+    },
+    {
+        "id":  "firefox",
+        "name":  "Firefox",
+        "description":  "Web browser",
+        "category":  "Browsers",
+        "icon":  "icons/firefox.svg",
+        "providers":  {
+                          "winget":  "Mozilla.Firefox",
+                          "choco":  "firefox",
+                          "scoop":  "firefox"
+                      }
+    },
+    {
+        "id":  "brave",
+        "name":  "Brave",
+        "description":  "Privacy browser",
+        "category":  "Browsers",
+        "icon":  "icons/brave.svg",
+        "providers":  {
+                          "winget":  "Brave.Brave",
+                          "choco":  "brave",
+                          "scoop":  "brave"
+                      }
+    },
+    {
+        "id":  "7zip",
+        "name":  "7-Zip",
+        "description":  "File archiver",
+        "category":  "Utilities",
+        "icon":  "icons/7zip.svg",
+        "providers":  {
+                          "winget":  "7zip.7zip",
+                          "choco":  "7zip",
+                          "scoop":  "7zip"
+                      }
+    },
+    {
+        "id":  "vlc",
+        "name":  "VLC Media Player",
+        "description":  "Media player",
+        "category":  "Media",
+        "icon":  "icons/vlc.svg",
+        "providers":  {
+                          "winget":  "VideoLAN.VLC",
+                          "choco":  "vlc",
+                          "scoop":  "vlc"
+                      }
+    },
+    {
+        "id":  "spotify",
+        "name":  "Spotify",
+        "description":  "Music streaming",
+        "category":  "Media",
+        "icon":  "icons/spotify.svg",
+        "providers":  {
+                          "winget":  "Spotify.Spotify",
+                          "choco":  "spotify",
+                          "scoop":  "spotify"
+                      }
+    },
+    {
+        "id":  "discord",
+        "name":  "Discord",
+        "description":  "Chat \u0026 voice",
+        "category":  "Communication",
+        "icon":  "icons/discord.svg",
+        "providers":  {
+                          "winget":  "Discord.Discord",
+                          "choco":  "discord",
+                          "scoop":  "discord"
+                      }
+    },
+    {
+        "id":  "git",
+        "name":  "Git",
+        "description":  "Version control",
+        "category":  "Developer Tools",
+        "icon":  "icons/git.svg",
+        "providers":  {
+                          "winget":  "Git.Git",
+                          "choco":  "git",
+                          "scoop":  "git"
+                      }
+    },
+    {
+        "id":  "nodejs",
+        "name":  "Node.js LTS",
+        "description":  "JavaScript runtime",
+        "category":  "Developer Tools",
+        "icon":  "icons/nodejs.svg",
+        "providers":  {
+                          "winget":  "OpenJS.NodeJS.LTS",
+                          "choco":  "nodejs-lts",
+                          "scoop":  "nodejs-lts"
+                      }
+    },
+    {
+        "id":  "python",
+        "name":  "Python 3",
+        "description":  "Programming language",
+        "category":  "Developer Tools",
+        "icon":  "icons/python.svg",
+        "providers":  {
+                          "winget":  "Python.Python.3.12",
+                          "choco":  "python",
+                          "scoop":  "python"
+                      }
+    },
+    {
+        "id":  "notepadpp",
+        "name":  "Notepad++",
+        "description":  "Text editor",
+        "category":  "Utilities",
+        "icon":  "icons/notepadpp.svg",
+        "providers":  {
+                          "winget":  "Notepad++.Notepad++",
+                          "choco":  "notepadplusplus",
+                          "scoop":  "notepadplusplus"
+                      }
+    },
+    {
+        "id":  "steam",
+        "name":  "Steam",
+        "description":  "Gaming platform",
+        "category":  "Gaming",
+        "icon":  "icons/steam.svg",
+        "providers":  {
+                          "winget":  "Valve.Steam",
+                          "choco":  "steam",
+                          "scoop":  "steam"
+                      }
+    },
+    {
+        "id":  "obs",
+        "name":  "OBS Studio",
+        "description":  "Screen recording",
+        "category":  "Media",
+        "icon":  "icons/obs.svg",
+        "providers":  {
+                          "winget":  "OBSProject.OBSStudio",
+                          "choco":  "obs-studio",
+                          "scoop":  "obs-studio"
+                      }
+    },
+    {
+        "id":  "powertoys",
+        "name":  "PowerToys",
+        "description":  "Windows utilities",
+        "category":  "Utilities",
+        "icon":  "icons/powertoys.svg",
+        "providers":  {
+                          "winget":  "Microsoft.PowerToys",
+                          "choco":  "powertoys",
+                          "scoop":  "powertoys"
+                      }
+    },
+    {
+        "id":  "docker-desktop",
+        "name":  "Docker Desktop",
+        "description":  "Container platform",
+        "category":  "Developer Tools",
+        "icon":  "icons/docker-desktop.svg",
+        "providers":  {
+                          "winget":  "Docker.DockerDesktop",
+                          "choco":  "docker-desktop",
+                          "scoop":  "docker"
+                      }
+    },
+    {
+        "id":  "zoom",
+        "name":  "Zoom",
+        "description":  "Video conferencing",
+        "category":  "Communication",
+        "icon":  "icons/zoom.svg",
+        "providers":  {
+                          "winget":  "Zoom.Zoom",
+                          "choco":  "zoom",
+                          "scoop":  "zoom"
+                      }
+    },
+    {
+        "id":  "slack",
+        "name":  "Slack",
+        "description":  "Team chat",
+        "category":  "Communication",
+        "icon":  "icons/slack.svg",
+        "providers":  {
+                          "winget":  "SlackTechnologies.Slack",
+                          "choco":  "slack",
+                          "scoop":  "slack"
+                      }
+    },
+    {
+        "id":  "malwarebytes",
+        "name":  "Malwarebytes",
+        "description":  "Anti-malware",
+        "category":  "Security",
+        "icon":  "icons/malwarebytes.svg",
+        "providers":  {
+                          "winget":  "Malwarebytes.Malwarebytes",
+                          "choco":  "malwarebytes",
+                          "scoop":  "malwarebytes"
+                      }
+    },
+    {
+        "id":  "everything",
+        "name":  "Everything",
+        "description":  "File search",
+        "category":  "Utilities",
+        "icon":  "icons/everything.png",
+        "providers":  {
+                          "winget":  "voidtools.Everything",
+                          "choco":  "everything",
+                          "scoop":  "everything"
+                      }
+    }
+]

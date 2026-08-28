@@ -1,0 +1,8 @@
+node_modules
+dist
+dist-electron
+release
+*.log
+SEGO-Stack-Data
+.DS_Store
+Thumbs.db
