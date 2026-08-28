@@ -3,6 +3,8 @@ import { contextBridge, ipcRenderer } from 'electron'
 contextBridge.exposeInMainWorld('api', {
   getProviders: () => ipcRenderer.invoke('get-providers'),
   getCatalog: () => ipcRenderer.invoke('get-catalog'),
+  getCatalogMeta: () => ipcRenderer.invoke('get-catalog-meta'),
+  refreshCatalog: () => ipcRenderer.invoke('refresh-catalog'),
   checkInstalled: (appId: string) => ipcRenderer.invoke('check-installed', appId),
   checkAllInstalled: () => ipcRenderer.invoke('check-all-installed'),
   installApps: (appIds: string[]) => ipcRenderer.invoke('install-apps', appIds),

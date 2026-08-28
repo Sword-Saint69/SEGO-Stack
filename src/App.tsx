@@ -2,11 +2,16 @@ import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 import type { CatalogApp, ProviderId } from './types'
 
+const REMOTE_CATALOG_URL = 'https://raw.githubusercontent.com/Sword-Saint69/SEGO-Stack/main/catalog.json'
+const REMOTE_CATALOG_FALLBACK_URL = 'https://cdn.jsdelivr.net/gh/Sword-Saint69/SEGO-Stack@main/catalog.json'
+
 declare global {
   interface Window {
     api: {
       getProviders: () => Promise<{ id: ProviderId; available: boolean; version?: string }[]>
       getCatalog: () => Promise<CatalogApp[]>
+      getCatalogMeta: () => Promise<{ remoteUrl: string; cachePath: string; cachedAt: string | null; cachedCount: number }>
+      refreshCatalog: () => Promise<{ success: boolean; catalog: CatalogApp[]; source: string }>
       checkAllInstalled: () => Promise<Record<string, boolean>>
       installApps: (appIds: string[]) => Promise<any>
       onInstallProgress: (cb: (data: any) => void) => () => void
@@ -50,12 +55,26 @@ export default function App() {
 
   const apiAvailable = !!(window as any).api?.getCatalog
 
+  // Best-possible catalog fetch for browser (vite dev) — GitHub Raw first
+  async function fetchRemoteCatalogBrowser(): Promise<CatalogApp[] | null> {
+    for (const url of [REMOTE_CATALOG_URL, REMOTE_CATALOG_FALLBACK_URL]) {
+      try {
+        const res = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(5000) } as any)
+        if (!res.ok) continue
+        const data = await res.json()
+        if (Array.isArray(data) && data.length > 0 && data[0].id) return data as CatalogApp[]
+      } catch {}
+    }
+    return null
+  }
+
   useEffect(() => {
     const init = async () => {
       try {
         if (!apiAvailable) {
-          const res = await fetch('/catalog.json')
-          const catalog = await res.json()
+          // Browser dev: GitHub Raw → local fallback (same priority as Electron)
+          const remote = await fetchRemoteCatalogBrowser()
+          const catalog = remote || await (await fetch('/catalog.json')).json()
           setApps(catalog.map((a: CatalogApp) => ({ ...a, selected: false, installed: null, installStatus: 'idle' as const })))
           setProviders([{ id: 'winget', available: true }, { id: 'choco', available: false }, { id: 'scoop', available: false }])
           setChecking(false)
@@ -130,13 +149,22 @@ export default function App() {
   }
 
   const handleRefresh = async () => {
-    if (!apiAvailable) { setLastSync(formatTime()); return }
     setChecking(true)
     try {
-      const [prov, installedMap] = await Promise.all([window.api.getProviders(), window.api.checkAllInstalled()])
-      setProviders(prov)
-      setApps(prev => prev.map(a => ({ ...a, installed: installedMap[a.id] ?? false, installStatus: installedMap[a.id] ? 'installed' : 'idle' })))
-      setLastSync(formatTime())
+      if (!apiAvailable) {
+        const remote = await fetchRemoteCatalogBrowser()
+        const catalog = remote || await (await fetch('/catalog.json')).json()
+        setApps(catalog.map((a: CatalogApp) => ({ ...a, selected: false, installed: null, installStatus: 'idle' as const })))
+        setLastSync(formatTime())
+      } else {
+        // Force remote re-fetch via main process, then re-check installed
+        const refreshed = await (window.api as any).refreshCatalog?.()
+        const catalog: CatalogApp[] = refreshed?.catalog || await window.api.getCatalog()
+        const [prov, installedMap] = await Promise.all([window.api.getProviders(), window.api.checkAllInstalled()])
+        setProviders(prov)
+        setApps(catalog.map(a => ({ ...a, selected: false, installed: installedMap[a.id] ?? false, installStatus: installedMap[a.id] ? 'installed' : 'idle' })))
+        setLastSync(formatTime())
+      }
     } catch {}
     setChecking(false)
   }

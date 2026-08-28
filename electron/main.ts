@@ -1,8 +1,16 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
-import { readFileSync, existsSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs'
 import { ProviderRouter } from './providers/router.js'
+
+// ── Remote catalog (GitHub Raw) — single source of truth ──
+// Users get catalog updates without rebuilding the EXE.
+// Local catalog.json is only a fallback for offline / first run.
+const REMOTE_CATALOG_URL = 'https://raw.githubusercontent.com/Sword-Saint69/SEGO-Stack/main/catalog.json'
+const REMOTE_CATALOG_FALLBACK_URL = 'https://cdn.jsdelivr.net/gh/Sword-Saint69/SEGO-Stack@main/catalog.json'
+const CATALOG_CACHE_FILE = 'catalog-cache.json'
+const CATALOG_FETCH_TIMEOUT_MS = 6000
 
 // Portable mode: keep data next to exe if running as portable
 // electron-builder portable sets PORTABLE_EXECUTABLE_DIR
@@ -24,8 +32,8 @@ const router = new ProviderRouter()
 let isInstalling = false
 let abortRequested = false
 
-// Catalog is bundled at project root or dist - portable aware
-function loadCatalog(): any[] {
+// Catalog is bundled at project root or dist - portable aware (local fallback)
+function loadLocalCatalog(): any[] {
   const portableDir = process.env.PORTABLE_EXECUTABLE_DIR || ''
   const candidates = [
     portableDir ? join(portableDir, 'catalog.json') : '',
@@ -39,11 +47,90 @@ function loadCatalog(): any[] {
   for (const p of candidates) {
     try {
       const data = readFileSync(p, 'utf-8')
-      return JSON.parse(data)
+      const parsed = JSON.parse(data)
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed
     } catch {}
   }
-  console.error('Failed to load catalog.json from candidates:', candidates)
   return []
+}
+
+function getCachePath(): string {
+  try {
+    return join(app.getPath('userData'), CATALOG_CACHE_FILE)
+  } catch {
+    return join(process.cwd(), CATALOG_CACHE_FILE)
+  }
+}
+
+function loadCachedCatalog(): any[] | null {
+  try {
+    const p = getCachePath()
+    if (!existsSync(p)) return null
+    const raw = readFileSync(p, 'utf-8')
+    const obj = JSON.parse(raw)
+    if (obj && Array.isArray(obj.catalog) && obj.catalog.length > 0) return obj.catalog
+    if (Array.isArray(obj) && obj.length > 0) return obj // legacy plain array cache
+  } catch {}
+  return null
+}
+
+function saveCachedCatalog(catalog: any[]) {
+  try {
+    const p = getCachePath()
+    mkdirSync(dirname(p), { recursive: true })
+    writeFileSync(p, JSON.stringify({ catalog, fetchedAt: new Date().toISOString(), source: REMOTE_CATALOG_URL }, null, 2), 'utf-8')
+  } catch (e) { console.warn('Failed to cache catalog', e) }
+}
+
+function isValidCatalog(data: any): boolean {
+  return Array.isArray(data) && data.length > 0 && data.every((a: any) => a && typeof a.id === 'string' && typeof a.name === 'string' && a.providers)
+}
+
+async function fetchRemoteCatalog(): Promise<any[] | null> {
+  const urls = [REMOTE_CATALOG_URL, REMOTE_CATALOG_FALLBACK_URL]
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, {
+        // @ts-ignore — Node 18+ has timeout via signal
+        signal: AbortSignal.timeout(CATALOG_FETCH_TIMEOUT_MS),
+        headers: { 'Accept': 'application/json', 'Cache-Control': 'no-cache' }
+      } as any)
+      if (!res.ok) continue
+      const data = await res.json()
+      if (isValidCatalog(data)) {
+        saveCachedCatalog(data)
+        console.log(`Catalog fetched from ${url} — ${data.length} apps`)
+        return data
+      }
+    } catch (e) { console.warn(`Catalog fetch failed ${url}`, (e as any)?.message || e) }
+  }
+  return null
+}
+
+// Best-possible fetch: remote → cache → bundled fallback
+async function getCatalog(): Promise<any[]> {
+  // 1. Try remote (fast, always fresh)
+  const remote = await fetchRemoteCatalog()
+  if (remote) return remote
+  // 2. Try disk cache from previous successful fetch (offline after first run)
+  const cached = loadCachedCatalog()
+  if (cached) {
+    console.log(`Using cached catalog — ${cached.length} apps`)
+    return cached
+  }
+  // 3. Fall back to bundled local catalog (first run offline)
+  const local = loadLocalCatalog()
+  if (local.length > 0) {
+    console.log(`Using bundled catalog — ${local.length} apps`)
+    return local
+  }
+  console.error('No catalog available (remote, cache, and local all failed)')
+  return []
+}
+
+// Sync wrapper for places that must remain sync (kept for backwards-compat, prefers cache)
+function loadCatalog(): any[] {
+  return loadCachedCatalog() || loadLocalCatalog()
 }
 
 function createWindow() {
@@ -89,18 +176,41 @@ ipcMain.handle('get-providers', async () => {
 })
 
 ipcMain.handle('get-catalog', async () => {
-  return loadCatalog()
+  return getCatalog()
+})
+
+ipcMain.handle('get-catalog-meta', async () => {
+  const cachePath = getCachePath()
+  let cachedAt: string | null = null
+  let cachedCount = 0
+  try {
+    const raw = readFileSync(cachePath, 'utf-8')
+    const obj = JSON.parse(raw)
+    cachedAt = obj.fetchedAt || null
+    cachedCount = obj.catalog?.length || 0
+  } catch {}
+  return { remoteUrl: REMOTE_CATALOG_URL, cachePath, cachedAt, cachedCount }
+})
+
+ipcMain.handle('refresh-catalog', async () => {
+  // Force re-fetch from GitHub Raw (bypass cache by fetching remote directly)
+  const remote = await fetchRemoteCatalog()
+  if (remote) return { success: true, catalog: remote, source: 'remote' }
+  const cached = loadCachedCatalog()
+  if (cached) return { success: true, catalog: cached, source: 'cache' }
+  const local = loadLocalCatalog()
+  return { success: local.length > 0, catalog: local, source: 'local' }
 })
 
 ipcMain.handle('check-installed', async (_event, appId: string) => {
-  const catalog = loadCatalog()
+  const catalog = await getCatalog()
   const app = catalog.find((a) => a.id === appId)
   if (!app) return false
   return router.isAppInstalled(app)
 })
 
 ipcMain.handle('check-all-installed', async () => {
-  const catalog = loadCatalog()
+  const catalog = await getCatalog()
   const results: Record<string, boolean> = {}
   // check in parallel with limit
   const batchSize = 5
@@ -128,7 +238,7 @@ ipcMain.handle('install-apps', async (_event, appIds: string[]) => {
   isInstalling = true
   abortRequested = false
 
-  const catalog = loadCatalog()
+  const catalog = await getCatalog()
   const appsToInstall = catalog.filter((a) => appIds.includes(a.id))
 
   const results: any[] = []

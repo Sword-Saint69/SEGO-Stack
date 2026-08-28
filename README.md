@@ -50,7 +50,7 @@ Built for developers who would otherwise just script it themselves.
 |---|---|
 | **Portable** | Single EXE `release/SEGO-Stack-Portable-*.exe` (~73 MB). Run from Desktop, USB, or network share. Data in `SEGO-Stack-Data/` next to the EXE. |
 | **Wraps what you trust** | Priority `winget → choco → scoop` per app. Auto-detects what's available, falls back if one fails. Silent flags handled for you (`--silent --accept-package-agreements`). |
-| **Curated but yours** | 20 apps pre-mapped (VS Code, Chrome, Firefox, Brave, 7-Zip, VLC, Spotify, Discord, Git, Node LTS, Python, Notepad++, Steam, OBS Studio, PowerToys, Docker Desktop, Zoom, Slack, Malwarebytes, Everything). Override with a `catalog.json` next to the EXE. |
+| **Curated but yours** | 20 apps pre-mapped (VS Code, Chrome, Firefox, Brave, 7-Zip, VLC, Spotify, Discord, Git, Node LTS, Python, Notepad++, Steam, OBS Studio, PowerToys, Docker Desktop, Zoom, Slack, Malwarebytes, Everything). **Live catalog** — `catalog.json` is fetched from GitHub Raw [`raw.githubusercontent.com/Sword-Saint69/SEGO-Stack/main/catalog.json`](https://raw.githubusercontent.com/Sword-Saint69/SEGO-Stack/main/catalog.json) with jsDelivr fallback, cached to `userData/catalog-cache.json`, and falls back to bundled file offline. Ship catalog updates without rebuilding the EXE — just push `catalog.json`. Override locally with a `catalog.json` next to the EXE. |
 | **Grid built for scanning** | 4 cards per row (responsive 3 / 2 / 1), 68px original icon, mono package ID (`11px IBM Plex Mono`), status tints only when it matters (`Installed` green, `Failed` red, `Installing…` indeterminate). No pills, no avatar bubbles. |
 | **Safe by default** | IDs validated `^[a-zA-Z0-9._\-]+$`, spawned as arg arrays (no shell), installs from official vendor only. Errors are human sentences (`Package not found on configured sources.`), raw trace only on demand. |
 
@@ -93,12 +93,12 @@ Find IDs with `winget search <name>` or `choco search <name>`.
 
 ```
 sego-stack/
-├── catalog.json              # logical id → winget/choco/scoop ids
+├── catalog.json              # ← source of truth, served live via GitHub Raw
 ├── public/icons/             # original brand SVGs (local, offline)
 │   └── vscode.svg, chrome.svg, ...
 ├── electron/
-│   ├── main.ts               # window + portable userData + catalog loader
-│   ├── preload.ts            # secure IPC bridge (contextIsolation)
+│   ├── main.ts               # window + portable userData + GitHub Raw catalog loader (remote → cache → local)
+│   ├── preload.ts            # secure IPC bridge (contextIsolation) + getCatalogMeta/refreshCatalog
 │   └── providers/
 │       ├── base.ts           # safe spawn, ID validation
 │       ├── winget.ts         # winget --silent
