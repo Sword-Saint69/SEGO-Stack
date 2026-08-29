@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="public/icons/vscode.svg" width="72" height="72" alt="SEGO Stack" />
+  <img src="public/icons/main.png" width="72" height="72" alt="SEGO Stack" />
 </p>
 
 <h1 align="center">SEGO Stack</h1>
@@ -29,18 +29,6 @@
 Setting up a new Windows machine means typing 30 `winget install` commands, hunting silent flags, and hoping you didn't miss one. SEGO Stack is the **inventory-tool alternative** to an app store: dense, predictable, and inspectable. You see the real package ID (`Microsoft.VisualStudioCode` in `IBM Plex Mono`), the real provider, and the real outcome — never a fake hacker terminal.
 
 Built for developers who would otherwise just script it themselves.
-
----
-
-### Screenshot
-
-<p align="center">
-  <img src="docs/screenshot.png" alt="SEGO Stack — 4-per-row grid with original icons" width="920" />
-  <br/>
-  <em>4-per-row grid · original brand logos · 6px cards · single accent (#1955A8) reserved for actions only</em>
-</p>
-
-> No sidebar. No activity dump. Just search, tick, and install.
 
 ---
 
