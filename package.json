@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build && tsc --project tsconfig.electron.json",
+    "build": "tsc && vite build && tsc --project tsconfig.electron.json && node -e \"require('fs').copyFileSync('electron/preload.cjs','dist-electron/preload.cjs')\"",
     "preview": "vite preview",
     "electron:dev": "vite --host",
     "start": "electron dist-electron/main.js",
@@ -42,6 +42,7 @@
       "output": "release"
     },
     "win": {
+      "icon": "public/icons/main.ico",
       "target": [
         {
           "target": "portable",

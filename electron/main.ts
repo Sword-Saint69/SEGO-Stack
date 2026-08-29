@@ -133,7 +133,30 @@ function loadCatalog(): any[] {
   return loadCachedCatalog() || loadLocalCatalog()
 }
 
+function getAppIconPath(): string | undefined {
+  // Prefer main.png next to catalog (portable dir), then public/icons, then dist/icons
+  const candidates = [
+    process.env.PORTABLE_EXECUTABLE_DIR ? join(process.env.PORTABLE_EXECUTABLE_DIR, 'public', 'icons', 'main.png') : '',
+    join(process.cwd(), 'public', 'icons', 'main.png'),
+    join(process.cwd(), 'public', 'icons', 'main.ico'),
+    join(__dirname, '../../public/icons/main.png'),
+    join(__dirname, '../dist/icons/main.png'),
+    join(app.getAppPath(), 'public', 'icons', 'main.png'),
+    join(dirname(app.getPath('exe')), 'resources', 'app.asar.unpacked', 'public', 'icons', 'main.png'),
+  ].filter(Boolean) as string[]
+  for (const p of candidates) { try { if (existsSync(p)) return p } catch {} }
+  return undefined
+}
+
 function createWindow() {
+  const iconPath = getAppIconPath()
+  if (iconPath) console.log('Using app icon:', iconPath)
+  // Prefer CJS preload (works with type:module), fallback to .js
+  const preloadCandidates = [join(__dirname, 'preload.cjs'), join(__dirname, 'preload.js')]
+  let preloadPath = preloadCandidates[0]
+  for (const p of preloadCandidates) { if (existsSync(p)) { preloadPath = p; break } }
+  console.log('Preload path:', preloadPath, 'exists:', existsSync(preloadPath))
+  console.log('__dirname:', __dirname, 'isPackaged:', app.isPackaged, 'candidates:', preloadCandidates.map(p => `${p}:${existsSync(p)}`).join(' '))
   mainWindow = new BrowserWindow({
     width: 1100,
     height: 750,
@@ -141,10 +164,12 @@ function createWindow() {
     minHeight: 600,
     title: 'SEGO Stack - by SEGO',
     backgroundColor: '#ffffff',
+    icon: iconPath,
     webPreferences: {
-      preload: join(__dirname, 'preload.js'),
+      preload: preloadPath,
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      sandbox: false
     },
     autoHideMenuBar: true
   })
@@ -243,6 +268,16 @@ ipcMain.handle('install-apps', async (_event, appIds: string[]) => {
 
   const results: any[] = []
 
+  // Helper: kill known conflicting processes before Squirrel-based installs (Discord, etc.)
+  const tryKillProcess = async (imageName: string) => {
+    try {
+      const { exec } = await import('child_process')
+      await new Promise<void>((res) => {
+        exec(`taskkill /IM "${imageName}" /F`, { windowsHide: true } as any, () => res())
+      })
+    } catch {}
+  }
+
   for (const app of appsToInstall) {
     if (abortRequested) {
       mainWindow?.webContents.send('install-progress', {
@@ -274,17 +309,50 @@ ipcMain.handle('install-apps', async (_event, appIds: string[]) => {
 
     const { provider, packageId } = resolved
 
+    // Pre-close known lock holders for Squirrel installers (Discord is notorious)
+    if (app.id === 'discord') {
+      mainWindow?.webContents.send('install-log', { appId: app.id, chunk: `\n--- Closing Discord.exe if running (Squirrel lock fix) ---\n` })
+      await tryKillProcess('Discord.exe')
+      await tryKillProcess('DiscordUpdater.exe')
+      // also killUpdate via Squirrel temp
+      await new Promise(r => setTimeout(r, 1500))
+    }
+
+    let curProgress = 10
+    const sendProgress = (chunk: string) => {
+      // Estimate progress from chunk text
+      let next: number | undefined
+      const pctMatch = chunk.match(/(\d{1,3}(?:\.\d+)?)\s*%/)
+      if (pctMatch) {
+        const v = parseFloat(pctMatch[1])
+        if (!isNaN(v) && v >= 0 && v <= 100) next = Math.min(95, Math.max(5, v))
+      } else if (/downloading/i.test(chunk)) next = Math.max(curProgress, 25)
+      else if (/downloaded|verif|hash/i.test(chunk)) next = Math.max(curProgress, 55)
+      else if (/starting.*install|extract|apply|installing/i.test(chunk)) next = Math.max(curProgress, 75)
+      else if (/bytes|received/i.test(chunk)) next = Math.min(90, curProgress + 2)
+      if (next !== undefined && next > curProgress) {
+        curProgress = next
+        mainWindow?.webContents.send('install-progress', {
+          appId: app.id,
+          status: 'installing',
+          provider: provider.id,
+          message: `Installing via ${provider.id} (${packageId})... ${Math.round(curProgress)}%`,
+          progress: curProgress
+        })
+      }
+      mainWindow?.webContents.send('install-log', { appId: app.id, chunk })
+    }
+
     mainWindow?.webContents.send('install-progress', {
       appId: app.id,
       status: 'installing',
       provider: provider.id,
-      message: `Installing via ${provider.id} (${packageId})...`
+      message: `Installing via ${provider.id} (${packageId})...`,
+      progress: curProgress
     })
 
     try {
-      const result = await provider.install(packageId, (chunk) => {
-        mainWindow?.webContents.send('install-log', { appId: app.id, chunk })
-      })
+      const result = await provider.install(packageId, (chunk) => sendProgress(chunk))
 
       if (result.success) {
         mainWindow?.webContents.send('install-progress', {
@@ -292,7 +360,8 @@ ipcMain.handle('install-apps', async (_event, appIds: string[]) => {
           status: 'success',
           provider: provider.id,
           message: `Installed via ${provider.id}`,
-          output: result.output.slice(-2000)
+          output: result.output.slice(-2000),
+          progress: 100
         })
         results.push({ appId: app.id, status: 'success', provider: provider.id })
       } else {
@@ -310,19 +379,25 @@ ipcMain.handle('install-apps', async (_event, appIds: string[]) => {
             appId: app.id,
             status: 'installing',
             provider: fallbackId,
-            message: `${provider.id} failed, trying ${fallbackId}...`
+            message: `${provider.id} failed, trying ${fallbackId}...`,
+            progress: curProgress
           })
           mainWindow?.webContents.send('install-log', { appId: app.id, chunk: `\n--- Fallback to ${fallbackId} ---\n` })
-          const fbResult = await fallbackProvider.install(fallbackPkg, (chunk: string) => {
+          let fbProgress = curProgress
+          const fbSend = (chunk: string) => {
+            const m = chunk.match(/(\d{1,3}(?:\.\d+)?)\s*%/)
+            if (m) { const v = parseFloat(m[1]); if (!isNaN(v) && v >=0 && v <=100) fbProgress = Math.min(95, Math.max(fbProgress, v)) ; mainWindow?.webContents.send('install-progress', { appId: app.id, status: 'installing', provider: fallbackId, message: `Installing via ${fallbackId} (${fallbackPkg})... ${Math.round(fbProgress)}%`, progress: fbProgress }) }
             mainWindow?.webContents.send('install-log', { appId: app.id, chunk })
-          })
+          }
+          const fbResult = await fallbackProvider.install(fallbackPkg, (chunk: string) => fbSend(chunk))
           if (fbResult.success) {
             mainWindow?.webContents.send('install-progress', {
               appId: app.id,
               status: 'success',
               provider: fallbackId,
               message: `Installed via ${fallbackId} (fallback)`,
-              output: fbResult.output.slice(-2000)
+              output: fbResult.output.slice(-2000),
+              progress: 100
             })
             results.push({ appId: app.id, status: 'success', provider: fallbackId })
             fallbackDone = true
@@ -335,7 +410,8 @@ ipcMain.handle('install-apps', async (_event, appIds: string[]) => {
             status: 'failed',
             provider: provider.id,
             message: `Failed via ${provider.id}`,
-            output: result.output.slice(-3000)
+            output: result.output.slice(-3000),
+            progress: curProgress
           })
           results.push({ appId: app.id, status: 'failed', provider: provider.id, output: result.output.slice(-3000) })
         }

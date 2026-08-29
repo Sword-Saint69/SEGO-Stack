@@ -1,23 +1,23 @@
-import { contextBridge, ipcRenderer } from 'electron'
+const { contextBridge, ipcRenderer } = require('electron')
 
-console.log('[SEGO] preload loaded — exposing window.api')
+console.log('[SEGO] preload CJS loaded — exposing window.api')
 
 contextBridge.exposeInMainWorld('api', {
   getProviders: () => ipcRenderer.invoke('get-providers'),
   getCatalog: () => ipcRenderer.invoke('get-catalog'),
   getCatalogMeta: () => ipcRenderer.invoke('get-catalog-meta'),
   refreshCatalog: () => ipcRenderer.invoke('refresh-catalog'),
-  checkInstalled: (appId: string) => ipcRenderer.invoke('check-installed', appId),
+  checkInstalled: (appId) => ipcRenderer.invoke('check-installed', appId),
   checkAllInstalled: () => ipcRenderer.invoke('check-all-installed'),
-  installApps: (appIds: string[]) => ipcRenderer.invoke('install-apps', appIds),
+  installApps: (appIds) => ipcRenderer.invoke('install-apps', appIds),
   cancelInstall: () => ipcRenderer.invoke('cancel-install'),
-  onInstallProgress: (callback: (data: any) => void) => {
-    const handler = (_: any, data: any) => callback(data)
+  onInstallProgress: (callback) => {
+    const handler = (_, data) => callback(data)
     ipcRenderer.on('install-progress', handler)
     return () => ipcRenderer.removeListener('install-progress', handler)
   },
-  onInstallLog: (callback: (data: any) => void) => {
-    const handler = (_: any, data: any) => callback(data)
+  onInstallLog: (callback) => {
+    const handler = (_, data) => callback(data)
     ipcRenderer.on('install-log', handler)
     return () => ipcRenderer.removeListener('install-log', handler)
   }

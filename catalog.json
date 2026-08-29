@@ -1,4 +1,4 @@
-﻿[
+[
     {
         "id":  "vscode",
         "name":  "Visual Studio Code",
@@ -237,6 +237,162 @@
                           "winget":  "voidtools.Everything",
                           "choco":  "everything",
                           "scoop":  "everything"
+                      }
+    },
+    {
+        "id":  "gimp",
+        "name":  "GIMP",
+        "description":  "Image editor",
+        "category":  "Graphics",
+        "icon":  "icons/gimp.svg",
+        "providers":  {
+                          "winget":  "GIMP.GIMP",
+                          "choco":  "gimp",
+                          "scoop":  "gimp"
+                      }
+    },
+    {
+        "id":  "inkscape",
+        "name":  "Inkscape",
+        "description":  "Vector graphics",
+        "category":  "Graphics",
+        "icon":  "icons/inkscape.svg",
+        "providers":  {
+                          "winget":  "Inkscape.Inkscape",
+                          "choco":  "inkscape",
+                          "scoop":  "inkscape"
+                      }
+    },
+    {
+        "id":  "blender",
+        "name":  "Blender",
+        "description":  "3D creation suite",
+        "category":  "Graphics",
+        "icon":  "icons/blender.svg",
+        "providers":  {
+                          "winget":  "BlenderFoundation.Blender",
+                          "choco":  "blender",
+                          "scoop":  "blender"
+                      }
+    },
+    {
+        "id":  "audacity",
+        "name":  "Audacity",
+        "description":  "Audio editor",
+        "category":  "Media",
+        "icon":  "icons/audacity.svg",
+        "providers":  {
+                          "winget":  "Audacity.Audacity",
+                          "choco":  "audacity",
+                          "scoop":  "audacity"
+                      }
+    },
+    {
+        "id":  "libreoffice",
+        "name":  "LibreOffice",
+        "description":  "Office suite",
+        "category":  "Office",
+        "icon":  "icons/libreoffice.svg",
+        "providers":  {
+                          "winget":  "TheDocumentFoundation.LibreOffice",
+                          "choco":  "libreoffice-fresh",
+                          "scoop":  "libreoffice"
+                      }
+    },
+    {
+        "id":  "thunderbird",
+        "name":  "Thunderbird",
+        "description":  "Email client",
+        "category":  "Communication",
+        "icon":  "icons/thunderbird.svg",
+        "providers":  {
+                          "winget":  "Mozilla.Thunderbird",
+                          "choco":  "thunderbird",
+                          "scoop":  "thunderbird"
+                      }
+    },
+    {
+        "id":  "filezilla",
+        "name":  "FileZilla",
+        "description":  "FTP client",
+        "category":  "Utilities",
+        "icon":  "icons/filezilla.svg",
+        "providers":  {
+                          "winget":  "FileZilla.Client",
+                          "choco":  "filezilla",
+                          "scoop":  "filezilla"
+                      }
+    },
+    {
+        "id":  "qbittorrent",
+        "name":  "qBittorrent",
+        "description":  "Torrent client",
+        "category":  "Utilities",
+        "icon":  "icons/qbittorrent.svg",
+        "providers":  {
+                          "winget":  "qBittorrent.qBittorrent",
+                          "choco":  "qbittorrent",
+                          "scoop":  "qbittorrent"
+                      }
+    },
+    {
+        "id":  "handbrake",
+        "name":  "HandBrake",
+        "description":  "Video transcoder",
+        "category":  "Media",
+        "icon":  "icons/handbrake.svg",
+        "providers":  {
+                          "winget":  "HandBrake.HandBrake",
+                          "choco":  "handbrake",
+                          "scoop":  "handbrake"
+                      }
+    },
+    {
+        "id":  "sharex",
+        "name":  "ShareX",
+        "description":  "Screen capture",
+        "category":  "Utilities",
+        "icon":  "icons/sharex.svg",
+        "providers":  {
+                          "winget":  "ShareX.ShareX",
+                          "choco":  "sharex",
+                          "scoop":  "sharex"
+                      }
+    },
+    {
+        "id":  "keepassxc",
+        "name":  "KeePassXC",
+        "description":  "Password manager",
+        "category":  "Security",
+        "icon":  "icons/keepassxc.svg",
+        "providers":  {
+                          "winget":  "KeePassXCTeam.KeePassXC",
+                          "choco":  "keepassxc",
+                          "scoop":  "keepassxc"
+                      }
+    },
+    {
+        "id":  "bitwarden",
+        "name":  "Bitwarden",
+        "description":  "Password manager",
+        "category":  "Security",
+        "icon":  "icons/bitwarden.svg",
+        "providers":  {
+                          "winget":  "Bitwarden.Bitwarden",
+                          "choco":  "bitwarden",
+                          "scoop":  "bitwarden"
+                      }
+    },
+    {
+        "id":  "joplin",
+        "name":  "Joplin",
+        "description":  "Note taking",
+        "category":  "Office",
+        "icon":  "icons/joplin.svg",
+        "providers":  {
+                          "winget":  "Joplin.Joplin",
+                          "choco":  "joplin",
+                          "scoop":  "joplin"
                       }
     }
 ]

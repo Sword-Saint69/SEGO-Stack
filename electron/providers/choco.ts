@@ -10,17 +10,24 @@ export class ChocoProvider extends BaseProvider {
   }
 
   listInstalledArgs(): string[] {
-    return ['list', '--local-only']
+    return ['list']
   }
 
   async isInstalled(packageId: string): Promise<boolean> {
     this.validateId(packageId)
     try {
-      const result = await runCommand(this.executable, ['list', '--local-only', '--exact', packageId], 15000)
-      const out = result.stdout.toLowerCase()
-      // choco list returns "1 packages installed." header + line "packagename version"
-      // If only 0 or 1 and no exact match, check
-      return out.includes(packageId.toLowerCase()) && !out.includes('0 packages installed')
+      const result = await runCommand(this.executable, ['list', packageId, '--exact', '--limit-output'], 15000)
+      const out = result.stdout.toLowerCase().trim()
+      const err = result.stderr.toLowerCase()
+      if (err.includes('0 packages installed') || out.includes('0 packages installed')) return false
+      if (result.code !== 0) return false
+      // choco --limit-output format: "packagename|version"
+      const lines = out.split('\n').map(l => l.trim()).filter(Boolean)
+      const idLower = packageId.toLowerCase()
+      return lines.some(line => {
+        const [name] = line.split('|')
+        return name.trim() === idLower
+      })
     } catch {
       return false
     }

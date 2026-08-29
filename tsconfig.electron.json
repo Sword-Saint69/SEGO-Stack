@@ -8,7 +8,7 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "outDir": "dist-electron",
-    "rootDir": ".",
+    "rootDir": "electron",
     "resolveJsonModule": true,
     "types": ["node"]
   },

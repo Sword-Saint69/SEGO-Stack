@@ -1,6 +1,19 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
 import './App.css'
 import type { CatalogApp, ProviderId } from './types'
+
+type ActivityEntry = {
+  id: string
+  time: string
+  pkg: string
+  appName: string
+  provider?: ProviderId
+  status: 'success' | 'failed' | 'installing' | 'queued'
+  message: string
+  raw?: string
+  expanded?: boolean
+  progress?: number
+}
 
 const REMOTE_CATALOG_URL = 'https://raw.githubusercontent.com/Sword-Saint69/SEGO-Stack/main/catalog.json'
 const REMOTE_CATALOG_FALLBACK_URL = 'https://cdn.jsdelivr.net/gh/Sword-Saint69/SEGO-Stack@main/catalog.json'
@@ -26,10 +39,16 @@ type AppState = CatalogApp & {
   installed: boolean | null
   installStatus: 'idle' | 'installed' | 'queued' | 'installing' | 'success' | 'failed' | 'skipped'
   installMessage?: string
+  installProgress?: number
+  installOutput?: string
+  expanded?: boolean
 }
 
 function humanizeError(raw: string): string {
   const low = raw.toLowerCase()
+  if (low.includes('cannot access the file') && low.includes('being used by another process')) return 'Close Discord completely (check Task Manager → Discord.exe) and retry — installer files are locked.'
+  if (low.includes('squirrel') && low.includes('aggregateexception')) return 'Close Discord and retry — Squirrel installer files are in use.'
+  if (low.includes('4294967295') || low.includes('0xffffffff')) return 'Installer failed — close the app (Discord) and retry, or try “Retry” to use fallback.'
   if (low.includes('no installed package found') || low.includes('no package found') || low.includes('0x8a150061') || low.includes('package not found')) return 'Package not found on configured sources.'
   if (low.includes('0x80073cf9') || low.includes('already installed')) return 'Already installed or blocked.'
   if (low.includes('0x8a150014') || low.includes('manifest')) return 'Manifest not found.'
@@ -52,8 +71,24 @@ export default function App() {
   const [installing, setInstalling] = useState(false)
   const [checking, setChecking] = useState(true)
   const [lastSync, setLastSync] = useState<string | null>(null)
+  const [activity, setActivity] = useState<ActivityEntry[]>([])
+  const [activityCollapsed, setActivityCollapsed] = useState(false)
+  const activityRef = useRef<HTMLDivElement>(null)
 
-  const apiAvailable = !!(window as any).api?.getCatalog
+  const [apiAvailable, setApiAvailable] = useState<boolean>(() => !!(window as any).api?.getCatalog)
+  const isElectron = typeof navigator !== 'undefined' && navigator.userAgent.toLowerCase().includes('electron')
+
+  // Re-check after mount — preload may attach slightly after first render in some Electron builds
+  useEffect(() => {
+    const check = !!(window as any).api?.getCatalog
+    if (check !== apiAvailable) setApiAvailable(check)
+    // Also poll once after 500ms in case preload is delayed
+    const t = setTimeout(() => {
+      const now = !!(window as any).api?.getCatalog
+      if (now !== apiAvailable) setApiAvailable(now)
+    }, 500)
+    return () => clearTimeout(t)
+  }, [apiAvailable])
 
   // Best-possible catalog fetch for browser (vite dev) — GitHub Raw first
   async function fetchRemoteCatalogBrowser(): Promise<CatalogApp[] | null> {
@@ -72,6 +107,18 @@ export default function App() {
     const init = async () => {
       try {
         if (!apiAvailable) {
+          if (isElectron) {
+            // Preload failed inside Electron — surface it, don't silently fall back to browser catalog
+            setActivity(prev => [...prev, { id: 'preload-'+Date.now(), time: formatTime(), pkg: 'system', appName: 'SEGO Stack', status: 'failed', message: 'Preload failed — API not available inside Electron.', raw: `userAgent=${navigator.userAgent} hasWindowApi=${!!(window as any).api} apiKeys=${(window as any).api ? Object.keys((window as any).api).join(',') : 'none'} — try closing and re-running SEGO-Stack-Portable.exe directly, or use win-unpacked/SEGO Stack.exe`, expanded: true }])
+            setProviders([])
+            setChecking(false)
+            // Still load catalog via browser fetch so UI is not empty, but installs will be blocked with error above
+            const remote = await fetchRemoteCatalogBrowser()
+            const catalog = remote || await (await fetch('/catalog.json')).json()
+            setApps(catalog.map((a: CatalogApp) => ({ ...a, selected: false, installed: null, installStatus: 'idle' as const })))
+            setLastSync(formatTime() + ' (preload failed)')
+            return
+          }
           // Browser dev: GitHub Raw → local fallback (same priority as Electron)
           const remote = await fetchRemoteCatalogBrowser()
           const catalog = remote || await (await fetch('/catalog.json')).json()
@@ -99,12 +146,63 @@ export default function App() {
       if (data.type === 'done') { setInstalling(false); return }
       if (data.type === 'check-batch') return
       const humanMessage = data.status === 'failed' ? humanizeError(data.message || data.output || '') : data.message
-      setApps(prev => prev.map(a => a.id !== data.appId ? a : { ...a, installStatus: data.status, installMessage: humanMessage }))
+      setApps(prev => prev.map(a => a.id !== data.appId ? a : { ...a, installStatus: data.status, installMessage: humanMessage, installProgress: data.progress, installOutput: data.output ? (a.installOutput || '') + data.output.slice(-2000) : a.installOutput, expanded: data.status === 'failed' ? true : a.expanded }))
+      // Activity entries for testing/debug
+      const now = formatTime()
+      if (data.status === 'installing') {
+        setActivity(prev => {
+          const existing = prev.find(p => p.pkg === data.appId && p.status === 'installing')
+          if (existing) {
+            // update progress/message in place
+            return prev.map(p => p.pkg === data.appId && p.status === 'installing' ? { ...p, message: data.message || p.message, progress: data.progress ?? p.progress, provider: data.provider || p.provider } : p)
+          }
+          return [...prev, { id: data.appId + '-' + Date.now(), time: now, pkg: data.appId, appName: apps.find(a=>a.id===data.appId)?.name || data.appId, provider: data.provider, status: 'installing', message: data.message || 'Installing…', raw: '', progress: data.progress ?? 5 }]
+        })
+      } else if (data.status === 'success') {
+        setActivity(prev => [...prev.filter(p => !(p.pkg === data.appId && p.status === 'installing')), { id: data.appId + '-' + Date.now(), time: now, pkg: data.appId, appName: apps.find(a=>a.id===data.appId)?.name || data.appId, provider: data.provider, status: 'success', message: 'Installed', raw: data.output?.slice(0,4000), progress: 100 }])
+      } else if (data.status === 'failed') {
+        setActivity(prev => [...prev.filter(p => !(p.pkg === data.appId && p.status === 'installing')), { id: data.appId + '-' + Date.now(), time: now, pkg: data.appId, appName: apps.find(a=>a.id===data.appId)?.name || data.appId, provider: data.provider, status: 'failed', message: humanMessage, raw: (data.output || data.message || '').slice(0,6000), expanded: true, progress: data.progress }])
+      } else if (data.status === 'queued') {
+        setActivity(prev => {
+          if (prev.find(p => p.pkg === data.appId && p.status === 'queued')) return prev
+          return [...prev, { id: data.appId + '-' + Date.now(), time: now, pkg: data.appId, appName: apps.find(a=>a.id===data.appId)?.name || data.appId, status: 'queued', message: data.message || 'Queued', raw: '', progress: 0 }]
+        })
+      }
     })
-    // log no longer needed for activity bar — kept only for debugging
-    const off2 = window.api.onInstallLog(() => {})
+    const off2 = window.api.onInstallLog((data: any) => {
+      setActivity(prev => {
+        const idx = [...prev].reverse().findIndex(p => p.pkg === data.appId && p.status === 'installing')
+        if (idx === -1) return prev
+        const realIdx = prev.length - 1 - idx
+        const copy = [...prev]
+        const chunk: string = data.chunk || ''
+        let prog: number | undefined
+        const pctMatch = chunk.match(/(\d{1,3}(?:\.\d+)?)\s*%/)
+        if (pctMatch) {
+          const v = parseFloat(pctMatch[1])
+          if (!isNaN(v) && v >= 0 && v <= 100) prog = Math.min(95, Math.max(5, v))
+        } else if (/downloading/i.test(chunk)) prog = 30
+        else if (/verif|hash/i.test(chunk)) prog = 60
+        else if (/starting.*install|apply|extract/i.test(chunk)) prog = 80
+        copy[realIdx] = { ...copy[realIdx], raw: (copy[realIdx].raw || '') + chunk, progress: prog ?? copy[realIdx].progress }
+        return copy
+      })
+      // also bump card progress + output from log chunks
+      const chunk: string = data.chunk || ''
+      let prog: number | undefined
+      const m = chunk.match(/(\d{1,3}(?:\.\d+)?)\s*%/)
+      if (m) { const v = parseFloat(m[1]); if (!isNaN(v) && v >=0 && v <=100) prog = Math.min(95, v) }
+      else if (/downloading/i.test(chunk)) prog = 35
+      else if (/verif|hash/i.test(chunk)) prog = 65
+      else if (/starting.*install|apply|extract/i.test(chunk)) prog = 85
+      setApps(prev => prev.map(a => a.id === data.appId ? { ...a, installProgress: prog !== undefined && a.installStatus === 'installing' ? prog : a.installProgress, installOutput: a.id === data.appId ? (a.installOutput || '') + chunk.slice(-4000) : a.installOutput } : a))
+    })
     return () => { off1(); off2() }
-  }, [])
+  }, [apiAvailable, isElectron])
+
+  useEffect(() => {
+    if (activityRef.current) activityRef.current.scrollTop = activityRef.current.scrollHeight
+  }, [activity])
 
   const filtered = useMemo(() => {
     return apps.filter(a => {
@@ -130,23 +228,41 @@ export default function App() {
     const ids = specificId ? [specificId] : selectedToInstall.map(a => a.id)
     if (ids.length === 0) return
     if (!apiAvailable) {
+      if (isElectron) {
+        // Electron but preload failed — do NOT simulate, surface the real error so it can be fixed
+        const msg = 'Electron API not available — preload failed. Close and re-run SEGO-Stack-Portable.exe (not via browser) and check Activity for details.'
+        setActivity(prev => [...prev, { id: 'preload-fail-'+Date.now(), time: formatTime(), pkg: 'system', appName: 'SEGO Stack', status: 'failed', message: msg, raw: `isElectron=${isElectron} apiAvailable=${apiAvailable} userAgent=${typeof navigator!=='undefined'?navigator.userAgent:'n/a'} hasWindowApi=${!!(window as any).api} preloadPath should be dist-electron/preload.js — if this persists try win-unpacked/SEGO Stack.exe or run as admin.`, expanded: true }])
+        // also mark the clicked card as failed so user sees it inline
+        setApps(prev => prev.map(a => ids.includes(a.id) ? { ...a, installStatus: 'failed' as const, installMessage: msg } : a))
+        return
+      }
+      // Browser preview — simulate and log to activity bar so tester sees full flow
       setInstalling(true)
       for (const id of ids) {
-        setApps(prev => prev.map(a => a.id === id ? { ...a, installStatus: 'installing' as const } : a))
-        await new Promise(r => setTimeout(r, 600))
-        setApps(prev => prev.map(a => a.id === id ? { ...a, installStatus: 'success' as const, installed: true } : a))
+        const name = apps.find(a=>a.id===id)?.name || id
+        setApps(prev => prev.map(a => a.id === id ? { ...a, installStatus: 'installing' as const, installMessage: 'Preview — not actually installing. Use Portable EXE.' } : a))
+        setActivity(prev => [...prev, { id: id+Date.now(), time: formatTime(), pkg: id, appName: name, status: 'installing', message: 'Preview — simulating install…', raw: 'Browser preview — no winget here. Use SEGO-Stack-Portable.exe for real install.' }])
+        await new Promise(r => setTimeout(r, 1800))
+        setApps(prev => prev.map(a => a.id === id ? { ...a, installStatus: 'success' as const, installMessage: 'Preview — download Portable EXE for real install.' } : a))
+        setActivity(prev => [...prev.filter(p=>!(p.pkg===id && p.status==='installing')), { id: id+Date.now()+'-done', time: formatTime(), pkg: id, appName: name, status: 'success', message: 'Preview — simulated success', raw: 'This was a browser preview. No files were changed.' }])
+        await new Promise(r => setTimeout(r, 500))
       }
       setInstalling(false)
       return
     }
     setInstalling(true)
+    const now = formatTime()
+    setActivity(prev => [...prev, ...ids.map(id => ({ id: id+Date.now()+Math.random(), time: now, pkg: id, appName: apps.find(a=>a.id===id)?.name || id, status: 'queued' as const, message: 'Queued', raw: '' }))])
     setApps(prev => prev.map(a => ids.includes(a.id) ? { ...a, installStatus: 'queued' as const } : a))
     try { await window.api.installApps(ids) } catch (e: any) {
       const msg = humanizeError(e?.message || String(e))
       setApps(prev => prev.map(a => ids.includes(a.id) ? { ...a, installStatus: 'failed' as const, installMessage: msg } : a))
+      setActivity(prev => [...prev, { id: 'err-'+Date.now(), time: formatTime(), pkg: 'system', appName: 'SEGO Stack', status: 'failed', message: msg, raw: String(e?.stack || e?.message || e), expanded: true }])
       setInstalling(false)
     }
   }
+
+  const handleRetry = (pkg: string) => handleInstall(pkg)
 
   const handleRefresh = async () => {
     setChecking(true)
@@ -173,7 +289,7 @@ export default function App() {
     <div className="app">
       <header className="topbar">
         <div className="topbar-left">
-          <div className="brand"><span className="brand-mark">S</span> SEGO <span className="brand-stack">Stack</span></div>
+          <div className="brand"><img src="icons/main.png" alt="SEGO" width="26" height="26" style={{ borderRadius: 6, objectFit: 'contain' }} onError={e => (e.currentTarget.style.display='none')} /> SEGO <span className="brand-stack">Stack</span></div>
           <div className="topbar-meta">
             <span>Catalog synced {lastSync ? `${lastSync}` : '—'}</span>
             <span>·</span>
@@ -198,6 +314,18 @@ export default function App() {
           </button>
         </div>
       </header>
+
+      {!apiAvailable && !isElectron && (
+        <div style={{ background: '#FEF3C7', borderBottom: '1px solid #FDE68A', padding: '8px 20px', fontSize: 12.5, color: '#92400E', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span>⚠ Preview mode — you are in the browser. Installs are <strong>simulated</strong> and take ~2s. For real installs, download and run <code style={{ background: '#fff', padding: '1px 6px', borderRadius: 4, border: '1px solid #FDE68A' }}>SEGO-Stack-Portable.exe</code> from Releases.</span>
+          <a href="https://github.com/Sword-Saint69/SEGO-Stack/releases" target="_blank" rel="noreferrer" style={{ marginLeft: 'auto', color: '#92400E', fontWeight: 600, textDecoration: 'underline' }}>Get Portable</a>
+        </div>
+      )}
+      {isElectron && !apiAvailable && (
+        <div style={{ background: '#FEE2E2', borderBottom: '1px solid #FECACA', padding: '8px 20px', fontSize: 12.5, color: '#991B1B', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span>⚠ Electron detected but API not available — <strong>preload failed</strong>. Close this window and run <code style={{ background: '#fff', padding: '1px 6px', borderRadius: 4, border: '1px solid #FECACA' }}>SEGO-Stack-Portable.exe</code> directly (not via browser). If it persists, try <code style={{ background: '#fff', padding: '1px 6px', borderRadius: 4, border: '1px solid #FECACA' }}>win-unpacked/SEGO Stack.exe</code> or Run as Administrator. Check Activity below for details.</span>
+        </div>
+      )}
 
       <main className="content">
         <div className="content-toolbar">
@@ -231,7 +359,11 @@ export default function App() {
             let statusLine: { text: string; cls: string; icon: string } | null = null
             if (isInstalled) statusLine = { text: 'Installed', cls: 'installed', icon: '✓' }
             else if (isFailed) statusLine = { text: app.installMessage || 'Failed', cls: 'failed', icon: '⚠' }
-            else if (isInstalling) statusLine = { text: 'Installing…', cls: 'queued', icon: '⋯' }
+            else if (isInstalling) {
+              const pct = app.installProgress
+              const label = pct !== undefined && pct > 0 && pct < 100 ? `Installing… ${Math.round(pct)}%` : 'Installing…'
+              statusLine = { text: label, cls: 'queued', icon: '⋯' }
+            }
 
             return (
               <div key={app.id} className={`grid-card ${cardTint} ${app.selected ? 'selected' : ''}`}>
@@ -247,8 +379,29 @@ export default function App() {
                 {statusLine && (
                   <div className={`grid-card-status ${statusLine.cls}`}>
                     <span aria-hidden>{statusLine.icon}</span> {statusLine.text}
-                    {isInstalling && <span className="inline-bar" style={{ marginLeft: 8 }}><span /></span>}
+                    {isInstalling && (
+                      app.installProgress !== undefined && app.installProgress > 0 && app.installProgress < 100 ? (
+                        <span className="inline-bar determinate" style={{ marginLeft: 8 }}><span style={{ width: `${app.installProgress}%`, animation: 'none', transform: 'none' }} /></span>
+                      ) : (
+                        <span className="inline-bar" style={{ marginLeft: 8 }}><span /></span>
+                      )
+                    )}
                   </div>
+                )}
+                {isInstalling && (
+                  <div className="card-progress"><div className="card-progress-fill" style={{ width: `${app.installProgress !== undefined ? Math.min(100, Math.max(0, app.installProgress)) : 12}%`, animation: app.installProgress === undefined ? 'indeterminate 1.2s ease-in-out infinite' : undefined }} /></div>
+                )}
+                {(app.installOutput || isFailed || isInstalling) && app.installProgress !== undefined && (
+                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)', textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>{app.installProgress !== undefined ? `${Math.round(app.installProgress)}%` : ''} {isInstalling ? 'downloading…' : ''}</div>
+                )}
+                {(app.installOutput || isFailed) && (
+                  <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 2 }}>
+                    <button className="link-btn" style={{ fontSize: 11 }} onClick={() => setApps(prev => prev.map(a => a.id === app.id ? { ...a, expanded: !a.expanded } : a))}>{app.expanded ? 'Hide log' : 'View log'}</button>
+                    {isFailed && <button className="link-btn" style={{ fontSize: 11 }} onClick={() => handleInstall(app.id)} disabled={installing}>Retry</button>}
+                  </div>
+                )}
+                {app.expanded && app.installOutput && (
+                  <div className="card-details" style={{ maxHeight: 90, overflow: 'auto', background: 'var(--bg-sunken)', border: '1px solid var(--border-default)', borderRadius: 6, padding: '6px 8px', fontSize: 10.5, lineHeight: '14px', fontFamily: 'IBM Plex Mono, monospace', whiteSpace: 'pre-wrap', wordBreak: 'break-all', color: 'var(--text-secondary)' }}>{app.installOutput.slice(-2500)}</div>
                 )}
                 <div className="grid-card-action">
                   {isInstalled ? (
