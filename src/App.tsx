@@ -77,6 +77,8 @@ export default function App() {
 
   const [apiAvailable, setApiAvailable] = useState<boolean>(() => !!(window as any).api?.getCatalog)
   const isElectron = typeof navigator !== 'undefined' && navigator.userAgent.toLowerCase().includes('electron')
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null)
+  const [isDark, setIsDark] = useState(false)
 
   // Re-check after mount — preload may attach slightly after first render in some Electron builds
   useEffect(() => {
@@ -285,15 +287,31 @@ export default function App() {
     setChecking(false)
   }
 
+  // Close card menu on outside click
+  useEffect(() => {
+    const onDocClick = () => setOpenMenuId(null)
+    document.addEventListener('click', onDocClick)
+    return () => document.removeEventListener('click', onDocClick)
+  }, [])
+
   return (
-    <div className="app">
-      <header className="topbar">
+    <div className={`app ${isDark ? 'theme-dark' : ''}`}>
+      <header className="topbar topbar-redesigned">
         <div className="topbar-left">
-          <div className="brand"><img src="icons/main.png" alt="SEGO" width="26" height="26" style={{ borderRadius: 6, objectFit: 'contain' }} onError={e => (e.currentTarget.style.display='none')} /> SEGO <span className="brand-stack">Stack</span></div>
-          <div className="topbar-meta">
-            <span>Catalog synced {lastSync ? `${lastSync}` : '—'}</span>
-            <span>·</span>
-            <button className="link-btn" onClick={handleRefresh} disabled={checking}>{checking ? 'Syncing…' : 'Refresh'}</button>
+          <div className="brand brand-large">
+            <img src="icons/main.png" alt="SEGO" width="32" height="32" style={{ borderRadius: 8, objectFit: 'contain', boxShadow: '0 1px 6px rgba(0,0,0,0.08)' }} onError={e => (e.currentTarget.style.display='none')} />
+            <div className="brand-text">
+              <div className="brand-title">SEGO <span className="brand-stack">Stack</span></div>
+              <div className="brand-subtitle">Portable • 33 apps • {providers.filter(p=>p.available).length} providers</div>
+            </div>
+          </div>
+          <div className="topbar-meta topbar-meta-emph">
+            <span className="sync-label">Catalog synced</span>
+            <strong className="sync-time">{lastSync ? lastSync : '—'}</strong>
+            <button className="btn btn-ghost btn-sm btn-refresh" onClick={handleRefresh} disabled={checking}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v7h-7"/></svg>
+              {checking ? 'Syncing…' : 'Refresh'}
+            </button>
           </div>
         </div>
         <div className="provider-toggles" role="group" aria-label="Providers">
@@ -302,15 +320,19 @@ export default function App() {
           ) : providers.map(p => {
             const active = p.available
             return (
-              <span key={p.id} className={`provider-chip ${active ? 'active available' : 'inactive'}`} title={active ? `Active — installs use ${p.id} when an app supports it` : `${p.id} not found`}>
-                <span className="dot" /> {p.id}
-              </span>
+              <button key={p.id} className={`provider-chip ${active ? 'active available' : 'inactive'}`} title={active ? `Active — installs use ${p.id}` : `${p.id} not found`} aria-pressed={active}>
+                <span className="chip-check">{active ? '✓' : '○'}</span>
+                {p.id}
+              </button>
             )
           })}
         </div>
         <div className="topbar-actions">
-          <button className="icon-btn" title="Refresh" onClick={handleRefresh} aria-label="Refresh">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v7h-7"/></svg>
+          <button className="icon-btn" title="Toggle theme" onClick={() => setIsDark(v=>!v)} aria-label="Toggle theme">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"><path d="M12 3a9 9 0 1 0 9 9c0-4.97-4.03-9-9-9z"/><path d="M12 3v2"/><path d="M12 19v2"/><path d="M3 12h2"/><path d="M19 12h2"/></svg>
+          </button>
+          <button className="icon-btn" title="Settings" aria-label="Settings">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 9 15a1.65 1.65 0 0 0-1-1.51V13a1.65 1.65 0 0 0 1-1.51 1.65 1.65 0 0 0 .33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 13.5 9a1.65 1.65 0 0 0 1 1.51V13a1.65 1.65 0 0 0-1 1.51z"/></svg>
           </button>
         </div>
       </header>
@@ -328,20 +350,22 @@ export default function App() {
       )}
 
       <main className="content">
-        <div className="content-toolbar">
-          <div className="search-wrap">
+        <div className="content-toolbar content-toolbar-redesigned">
+          <div className="search-wrap search-wrap-large">
             <span className="search-icon">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
             </span>
             <input placeholder="Search apps, package IDs…" value={search} onChange={e => setSearch(e.target.value)} aria-label="Search apps" />
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
-            <span style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}><strong style={{ color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>{selectedToInstall.length}</strong> selected</span>
-            <span style={{ color: 'var(--border-default)' }}>·</span>
-            <span style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>{filtered.length} shown</span>
-            <button className="btn btn-ghost btn-sm" onClick={selectAllFiltered} disabled={installing}>Select all</button>
-            <button className="btn btn-ghost btn-sm" onClick={clearAll} disabled={installing || selectedToInstall.length===0}>Clear</button>
-            <button className="btn btn-primary" onClick={() => handleInstall()} disabled={installing || selectedToInstall.length===0 || !anyProvider}>
+          <div className="toolbar-selection">
+            <span className="selection-count"><strong>{selectedToInstall.length}</strong> selected</span>
+            <span className="selection-divider">·</span>
+            <span className="selection-shown">{filtered.length} shown</span>
+          </div>
+          <div className="toolbar-actions">
+            <button className="btn btn-outline btn-select-all" onClick={selectAllFiltered} disabled={installing}>Select all</button>
+            <button className="btn btn-ghost btn-clear" onClick={clearAll} disabled={installing || selectedToInstall.length===0}>Clear</button>
+            <button className="btn btn-primary btn-cta" onClick={() => handleInstall()} disabled={installing || selectedToInstall.length===0 || !anyProvider}>
               {selectedToInstall.length===0 ? 'Select apps to install' : `Install ${selectedToInstall.length} ${selectedToInstall.length===1?'app':'apps'}`}
             </button>
           </div>
@@ -366,18 +390,31 @@ export default function App() {
             }
 
             return (
-              <div key={app.id} className={`grid-card ${cardTint} ${app.selected ? 'selected' : ''}`}>
+              <div key={app.id} className={`grid-card grid-card-redesigned ${cardTint} ${app.selected ? 'selected' : ''}`}>
                 <div className="grid-card-top">
-                  <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{app.category}</span>
-                  <input type="checkbox" className="row-check" checked={app.selected} disabled={isInstalled || installing} onChange={() => toggleSelect(app.id)} aria-label={`Select ${app.name}`} />
+                  <span className="card-category">{app.category}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <input type="checkbox" className="row-check" checked={app.selected} disabled={isInstalled || installing} onChange={() => toggleSelect(app.id)} aria-label={`Select ${app.name}`} />
+                    <div className="card-menu-wrap" onClick={e => e.stopPropagation()}>
+                      <button className="card-menu-btn" onClick={e => { e.stopPropagation(); setOpenMenuId(openMenuId === app.id ? null : app.id) }} aria-label="More actions">⋮</button>
+                      {openMenuId === app.id && (
+                        <div className="card-menu">
+                          <button onClick={() => { handleInstall(app.id); setOpenMenuId(null) }} disabled={isInstalled || installing}>Install</button>
+                          <button onClick={() => { navigator.clipboard?.writeText(pkgId); setOpenMenuId(null) }}>Copy package ID</button>
+                          <button onClick={() => { setApps(prev => prev.map(a => a.id === app.id ? { ...a, expanded: !a.expanded } : a)); setOpenMenuId(null) }}>{app.expanded ? 'Hide details' : 'View details'}</button>
+                          {pkgId && <button onClick={() => { window.open(`https://winget.run/pkg/${pkgId}`, '_blank'); setOpenMenuId(null) }}>Open package page</button>}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <div className="grid-card-icon">
+                <div className="grid-card-icon grid-card-icon-large">
                   <img src={app.icon} alt={app.name} loading="lazy" onError={e => { const t = e.currentTarget; t.style.display='none'; const p=t.parentElement; if(p) p.textContent=app.name.slice(0,2).toUpperCase() }} />
                 </div>
-                <div className="grid-card-name">{app.name}</div>
-                <div className="mono grid-card-id" title={pkgId}>{pkgId}</div>
+                <div className="grid-card-name grid-card-name-prominent">{app.name}</div>
+                <div className="mono grid-card-id grid-card-id-muted" title={pkgId}>{pkgId}</div>
                 {statusLine && (
-                  <div className={`grid-card-status ${statusLine.cls}`}>
+                  <div className={`grid-card-status status-badge ${statusLine.cls}`}>
                     <span aria-hidden>{statusLine.icon}</span> {statusLine.text}
                     {isInstalling && (
                       app.installProgress !== undefined && app.installProgress > 0 && app.installProgress < 100 ? (
@@ -420,6 +457,16 @@ export default function App() {
         </div>
         {filtered.length === 0 && <div className="empty-state">No apps match “{search}”. Try a different name.</div>}
       </main>
+      <footer className="app-footer">
+        <div className="footer-left">
+          <span className="footer-dot" /> {providers.filter(p=>p.available).length} providers • {filtered.length} apps • {checking ? 'Syncing…' : 'Up to date'}
+        </div>
+        <div className="footer-right">
+          <span>{apps.filter(a=>a.installed).length} installed</span>
+          <span className="footer-sep">·</span>
+          <span className="footer-muted">SEGO Stack {isElectron ? 'Desktop' : 'Web'}</span>
+        </div>
+      </footer>
     </div>
   )
 }
